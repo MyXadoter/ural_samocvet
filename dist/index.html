@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="Доказательное планирование маршрутов выездных инженеров с baseline-сравнением и дорожной матрицей" />
+  <title>Маршруты инженеров — версия 2</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='15' fill='%23ffcc00'/%3E%3Cpath d='M4 11h24v6H4zm3 12h18' stroke='%23000' stroke-width='5'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="overrides.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="К началу страницы"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>маршруты</span></a>
+    <div class="shift-state"><span class="pulse"></span><strong>Смена 17 августа</strong><span id="headerCurrentTime">Текущее время 14:30</span></div>
+    <button class="icon-button" id="helpBtn" aria-label="Справка">?</button>
+  </header>
+  <main id="top">
+    <section class="hero">
+      <div><p class="eyebrow">Диспетчерская · версия 2</p><h1>План на смену</h1><p class="lede">Regret‑2 распределяет заявки по единой дорожной матрице. При оперативном пересчёте фактически начатые и завершённые работы остаются неизменными.</p></div>
+      <div class="hero-actions">
+        <button class="button outline" id="stressTestBtn">Сценарий защиты</button>
+        <button class="button outline" id="circumstancesBtn">Новое событие</button>
+        <button class="button ghost" id="settingsBtn">Настроить параметры смены</button>
+        <button class="button secondary" id="replanBtn"><span aria-hidden="true">↻</span> Перепланировать</button>
+        <button class="button primary" id="planBtn">Рассчитать план</button>
+      </div>
+    </section>
+    <section class="evidence-panel" id="evidencePanel" aria-labelledby="evidenceTitle">
+      <div class="evidence-head"><div><p class="eyebrow">Доказательность расчёта</p><h2 id="evidenceTitle">Baseline → regret‑2</h2></div><div class="calculation-badge"><span id="matrixStatus">Подготовка дорожной матрицы</span><strong id="calculationTime">—</strong></div></div>
+      <p class="evidence-intro">Оба алгоритма получают одинаковые заявки, инженеров, ограничения и матрицу дорожного времени. Значения ниже рассчитываются в браузере, а не записаны заранее.</p>
+      <div class="comparison-grid" id="comparisonGrid"></div>
+      <div class="proof-strip"><span><b id="regretProof">regret = c₂ − c₁</b> для каждой нераспределённой заявки</span><span><b id="localSearchProof">0</b> улучшений local search</span><span><b id="qualityProof">Демо-данные проверены</b></span></div>
+    </section>
+    <section class="metrics" aria-label="Показатели плана">
+      <button class="metric-card" id="assignedCard"><span>Распределено</span><strong id="assignedMetric">0 <small>из 0</small></strong><b class="trend good" id="assignedPercent">0%</b></button>
+      <button class="metric-card" id="engineersCard"><span>Инженеры в плане</span><strong id="engineersMetric">0 <small>из 0</small></strong><b class="trend">Открыть графики →</b></button>
+      <button class="metric-card" id="distanceCard"><span>Общий пробег</span><strong id="distanceMetric">0 <small>км</small></strong><b class="trend good">По инженерам →</b></button>
+      <button class="metric-card" id="freeResourceCard"><span>Свободный ресурс</span><strong id="freeResourceMetric">0 <small>ч</small></strong><b class="trend">Матрица окон →</b></button>
+      <button class="metric-card" id="overloadCard"><span>Перегружено</span><strong id="overloadedMetric">0 <small>спец.</small></strong><b class="trend" id="overloadNote">наложений нет</b></button>
+      <article class="new-requests clickable-card" id="newRequestsCard" tabindex="0"><span>Новые заявки</span><strong id="newRequestsMetric">0</strong><button id="openNewRequests">Добавить →</button></article>
+      <article class="attention clickable-card" id="unassignedCard" tabindex="0"><span>Не распределено</span><strong id="unassignedMetric">0</strong><button id="openCorrections">Разобрать →</button></article>
+    </section>
+    <section class="dashboard-grid">
+      <article class="panel delay-panel">
+        <div class="panel-head"><div><p class="eyebrow">Исполнение</p><h2>Накопленное отставание</h2></div><div class="legend"><span><i class="legend-line"></i> по инженерам</span><span><i class="legend-limit"></i> порог</span></div></div>
+        <div class="chart-wrap"><svg id="delayChart" viewBox="0 0 760 270" role="img" aria-label="График накопленного отставания инженеров"></svg></div>
+        <div class="chart-foot"><span>08:00</span><span>10:00</span><span>12:00</span><span>14:00</span><span>16:00</span><span>18:00</span></div>
+        <p class="chart-caption">Каждая точка — сумма отклонений фактического окончания работ от планового времени.</p>
+      </article>
+      <article class="panel signal-panel">
+        <div class="panel-head"><div><p class="eyebrow">Сигналы</p><h2>Требует внимания</h2></div><span class="count-badge">3</span></div>
+        <div class="signal critical"><span class="signal-time">14:32</span><div><strong>Пётр Соколов · +14 мин</strong><p>Окончание заявки #4893 зафиксировано позже плана</p></div><button data-focus="petr">Открыть</button></div>
+        <div class="signal warn"><span class="signal-time">14:18</span><div><strong>Риск SLA у заявки #57299</strong><p>Запас до конца окна сократился до 11 минут</p></div><button data-focus="request">Открыть</button></div>
+        <div class="signal"><span class="signal-time">13:54</span><div><strong>Инженер в резерве</strong><p>Алексей Морозов доступен для локальной вставки</p></div><button data-focus="reserve">Открыть</button></div>
+      </article>
+    </section>
+    <section class="routes-section">
+      <div class="section-head"><div><p class="eyebrow">Маршруты</p><h2>План инженеров</h2></div><div class="filters"><button class="chip active">Все</button><button class="chip">С риском</button><button class="chip">В резерве</button></div></div>
+      <div class="route-layout">
+        <div class="route-list" id="routeList"></div>
+        <div class="map-panel" aria-label="Интерактивная карта маршрутов">
+          <div class="map-toolbar"><span id="mapRouteStatus">Строим маршруты по дорогам…</span><button id="fitMap">Показать все</button></div>
+          <div id="routeMap" role="application" aria-label="Карта маршрутов инженеров"></div>
+          <div class="map-legend"><span><i class="dot yellow"></i>план</span><span><i class="dot red"></i>риск</span><span><i class="dot black"></i>старт</span></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <dialog id="settingsDialog" class="dialog wide-dialog">
+    <form method="dialog">
+      <div class="dialog-head"><div><p class="eyebrow">Подготовка смены</p><h2>Параметры смены</h2></div><button class="close" value="cancel" aria-label="Закрыть">×</button></div>
+      <div class="setup-grid">
+        <article class="upload-card ready"><div class="upload-icon">01</div><div><h3>Заявки</h3><p id="requestsMeta">10 демонстрационных заявок</p></div><label class="file-button">Заменить<input id="requestsFile" type="file" accept=".csv,.xlsx,.xls,.json" /></label></article>
+        <article class="upload-card ready"><div class="upload-icon">02</div><div><h3>Инженеры</h3><p id="engineersMeta">6 инженеров</p></div><label class="file-button">Загрузить XLSX<input id="engineersFile" type="file" accept=".xlsx,.xls" /></label></article>
+        <article class="upload-card locked"><div class="upload-icon">03</div><div><h3>Нормативы</h3><p id="normsMeta">4 вида работ · стандартный справочник</p></div><a class="file-button" href="assets/Нормативы.xlsx" download>Скачать</a></article>
+        <article class="trigger-card"><div class="trigger-head"><div><h3>Автопересчёт</h3><p>При накопленном отставании</p></div><label class="switch"><input id="autoTrigger" type="checkbox" checked /><span></span><em>Включён</em></label></div><div class="threshold"><input id="threshold" type="number" min="1" max="180" value="20" aria-label="Порог отставания в минутах" /><span>минут</span></div><p class="trigger-note" id="triggerNote">Максимальное отставание сейчас: 14 минут</p></article>
+        <article class="time-card"><div class="upload-icon">04</div><div><h3>Текущее время</h3><p>Эмуляция хода рабочей смены</p></div><label class="time-input">Время<input id="currentTime" type="time" value="14:30" /></label></article>
+      </div>
+      <p class="locked-note">Нормативы зафиксированы для расчёта и не заменяются диспетчером: подключение — 90 мин, авария — 100 мин, дозаказ — 40 мин, локальный ремонт — 50 мин.</p><p class="quality-note" id="qualityGateNote">Quality gate: демонстрационные данные приняты без ошибок.</p>
+      <div class="dialog-actions"><button class="button primary" value="default">Сохранить параметры</button></div>
+    </form>
+  </dialog>
+  <dialog id="engineersDialog" class="dialog wide-dialog"><form method="dialog"><div class="dialog-head"><div><p class="eyebrow">Состав смены</p><h2>Инженеры и графики</h2></div><button class="close" value="cancel">×</button></div><div id="engineersList" class="engineers-list"></div></form></dialog>
+  <dialog id="engineerPlanDialog" class="dialog"><form method="dialog"><div class="dialog-head"><div><p class="eyebrow">План инженера</p><h2 id="engineerPlanTitle">Инженер</h2></div><button class="close" value="cancel">×</button></div><div id="engineerPlanBody"></div><div class="dialog-actions"><button class="button ghost" value="cancel">Закрыть</button><button class="button primary" type="button" id="manualReplanFromPlan">Ручное перепланирование</button></div></form></dialog>
+  <dialog id="manualReplanDialog" class="dialog small">
+    <form method="dialog" id="manualReplanForm"><div class="dialog-head"><div><p class="eyebrow">Диспетчерская корректировка</p><h2>Ручное перепланирование</h2></div><button class="close" value="cancel">×</button></div>
+      <label class="field">Заявка<select id="manualRequest"></select></label><label class="field">Инженер<select id="manualEngineer"></select></label><label class="field">Начало работ<input id="manualStart" type="time" value="15:00" required /></label><label class="check"><input id="allowOverlap" type="checkbox" /> Разрешить только временное наложение</label><label class="field" id="overrideReasonField" hidden>Причина исключения<textarea id="overrideReason" rows="2" placeholder="Обоснование для журнала действий"></textarea></label><div id="replanImpact" class="impact-box"></div><button class="button primary wide" value="default">Применить корректировку</button>
+    </form>
+  </dialog>
+  <dialog id="circumstancesDialog" class="dialog">
+    <form method="dialog" id="circumstancesForm"><div class="dialog-head"><div><p class="eyebrow">Оперативное управление</p><h2>Новое событие</h2></div><button class="close" value="cancel">×</button></div>
+      <div class="mode-switch"><button type="button" class="active" data-mode="emergency">Новая аварийная заявка</button><button type="button" data-mode="offline">Статус инженера</button></div>
+      <div id="emergencyFields" class="form-grid"><label class="field">Номер заявки<input id="emergencyId" value="A-1001" required /></label><label class="field">Район<select id="emergencyZone"><option>Басманный</option><option>Таганский</option><option>Лефортово</option><option>Текстильщики</option><option>Кузьминки</option><option>Выхино</option></select></label><label class="field span-2">Адрес<input id="emergencyAddress" value="ул. Радио, 12" required /></label><label class="field">Начало окна<input id="emergencyStart" type="time" value="15:00" /></label><label class="field">Конец окна<input id="emergencyEnd" type="time" value="17:00" /></label><label class="field">Навык<select id="emergencySkill"><option>Линия</option><option>FTTB</option><option>Роутер</option><option>Подключение</option><option>TV</option><option>Гигабит</option></select></label><label class="field">Транспорт<select id="emergencyTransport"><option value="">Неважно</option><option>Автомобиль</option><option>Общественный транспорт</option></select></label></div>
+      <div id="offlineFields" hidden><label class="field">Инженер<select id="offlineEngineer"></select><small id="engineerStatusHint" class="form-hint"></small></label></div><div class="dialog-actions"><button class="button ghost" value="cancel">Отмена</button><button class="button danger" id="applyCircumstances" value="default">Внести и перепланировать</button></div>
+    </form>
+  </dialog>
+  <dialog id="correctionsDialog" class="dialog">
+    <form method="dialog"><div class="dialog-head"><div><p class="eyebrow">Ручная корректировка</p><h2>Нераспределённые заявки</h2></div><button class="close" value="cancel">×</button></div><p class="dialog-intro"><strong>Почему видны не все инженеры?</strong> Основной список оставляет только тех, кто проходит ограничения по навыку, транспорту, смене и временному окну. Ниже каждый исключённый инженер показан неактивным — рядом указана конкретная причина.</p><div id="unassignedList" class="unassigned-list"></div><div class="dialog-actions"><button class="button ghost" value="cancel">Отмена</button><button class="button primary" id="applyCorrections" value="default">Применить и пересчитать</button></div></form>
+  </dialog>
+  <dialog id="factDialog" class="dialog small"><form method="dialog" id="factForm"><div class="dialog-head"><div><p class="eyebrow">Факт исполнения</p><h2 id="factTitle">Заявка</h2></div><button class="close" value="cancel">×</button></div><input id="factRequestId" type="hidden" /><label class="field">Статус<select id="factStatus"><option value="planned">Не начата</option><option value="enroute">В пути</option><option value="started">Начата</option><option value="completed">Завершена</option></select></label><label class="field">Фактическое время<input id="factTime" type="time" value="14:30" /></label><p class="form-hint">Для завершённой заявки отклонение считается как фактическое окончание минус плановое окончание. Только фактические статусы фиксируют работу при перепланировании.</p><button class="button primary wide" value="default">Сохранить факт</button></form></dialog>
+  <dialog id="stressDialog" class="dialog wide-dialog"><form method="dialog"><div class="dialog-head"><div><p class="eyebrow">Stress-test</p><h2>До → событие → после</h2></div><button class="close" value="cancel">×</button></div><div id="stressBody"></div><div class="dialog-actions"><button class="button primary" value="default">Закрыть</button></div></form></dialog>
+  <dialog id="helpDialog" class="dialog small"><form method="dialog"><div class="dialog-head"><h2>Как работает расчёт</h2><button class="close" value="cancel">×</button></div><ol><li>Quality gate отклоняет строки с пропусками, дубликатами и неверным временем.</li><li>Одна матрица OSRM используется для назначения, пробега, времени и карты.</li><li>Для каждой заявки считаются лучшие вставки c₁ и c₂; выбирается максимальный regret = c₂ − c₁ с учётом приоритета.</li><li>После начального решения выполняются 2‑opt и relocate только при улучшении и сохранении hard constraints.</li><li>Оперативный режим фиксирует работы со статусом «в пути», «начата» или «завершена».</li></ol><button class="button primary wide" value="default">Понятно</button></form></dialog>
+  <dialog id="metricDetailsDialog" class="dialog wide-dialog"><form method="dialog"><div class="dialog-head"><div><p class="eyebrow" id="metricDetailsEyebrow">Показатель</p><h2 id="metricDetailsTitle">Подробная информация</h2></div><button class="close" value="cancel">×</button></div><div id="metricDetailsBody"></div><div class="dialog-actions"><button class="button primary" value="default">Закрыть</button></div></form></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <footer class="footer"><strong>Уральские самоцветы</strong><span>Команда разработки: Савина Юлия · Агапитова Ольга · Прокопьев Дмитрий</span><span>Екатеринбург · 2026</span></footer>
+</body>
+</html>
